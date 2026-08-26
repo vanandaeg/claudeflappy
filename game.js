@@ -53,6 +53,7 @@
     bird = {
       x: BIRD_X,
       y: HEIGHT / 2,
+      baseY: HEIGHT / 2,
       velocity: 0,
       rotation: 0,
     };
@@ -127,6 +128,11 @@
       wingPhase += dt * 10;
     }
 
+    if (state === STATE.START) {
+      bird.y = bird.baseY + Math.sin(wingPhase * 0.6) * 8;
+      bird.rotation = Math.sin(wingPhase * 0.6) * 0.15;
+    }
+
     if (state !== STATE.PLAYING) return;
 
     bird.velocity += GRAVITY * dt;
@@ -178,22 +184,35 @@
     const bottomY = baseY - trunkHeight;
     const r = tree.width / 2;
 
-    // Stack overlapping circles from bottom to top. The vertical step is
-    // kept smaller than the combined radius of neighboring lobes so they
-    // always overlap, however tall the tree is - otherwise tall/narrow
-    // trees end up with lobes spaced too far apart to touch.
-    const step = r * 0.8;
+    // Stack overlapping circles from bottom to top, bulging widest in the
+    // middle and tapering at both ends - an oval silhouette reads as much
+    // rounder than a straight vertical stack. The vertical step is kept
+    // smaller than the lobes' combined radius so neighbors always overlap,
+    // however tall the tree is.
+    const step = r * 0.65;
     const layers = Math.max(3, Math.round(tree.height / step) + 1);
 
     ctx.fillStyle = tree.shade ? '#3f6b47' : '#4f7d54';
     for (let i = 0; i < layers; i++) {
-      const t = layers === 1 ? 0 : i / (layers - 1); // 0 at bottom, 1 at top
+      const t = layers === 1 ? 0.5 : i / (layers - 1); // 0 at bottom, 1 at top
+      const bulge = Math.sin(t * Math.PI); // 0 at both ends, 1 in the middle
       const ly = bottomY - r * 0.5 - i * step;
-      const jitter = Math.sin(i * 2.4 + tree.width) * r * 0.3;
-      const lr = r * (1 - t * 0.3); // taper slightly toward the top
+      const lr = r * (0.7 + bulge * 0.45);
+
       ctx.beginPath();
-      ctx.arc(cx + jitter, ly, lr, 0, Math.PI * 2);
+      ctx.arc(cx, ly, lr, 0, Math.PI * 2);
       ctx.fill();
+
+      if (bulge > 0.2) {
+        const sideOffset = lr * 0.75;
+        const sideR = lr * 0.7;
+        ctx.beginPath();
+        ctx.arc(cx - sideOffset, ly, sideR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + sideOffset, ly, sideR, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
@@ -245,20 +264,36 @@
 
     const wingAngle = Math.sin(wingPhase) * 0.5;
 
-    // tail
-    ctx.fillStyle = '#f9a825';
+    // tail feathers
+    ctx.fillStyle = '#d84315';
     ctx.beginPath();
-    ctx.moveTo(-BIRD_RADIUS + 3, 0);
-    ctx.lineTo(-BIRD_RADIUS - 8, -6);
-    ctx.lineTo(-BIRD_RADIUS - 8, 6);
+    ctx.moveTo(-BIRD_RADIUS + 4, -1);
+    ctx.lineTo(-BIRD_RADIUS - 9, -7);
+    ctx.lineTo(-BIRD_RADIUS - 4, 0);
+    ctx.lineTo(-BIRD_RADIUS - 9, 7);
     ctx.closePath();
     ctx.fill();
 
-    // body
-    const bodyGrad = ctx.createRadialGradient(-4, -5, 2, 0, 0, BIRD_RADIUS + 2);
-    bodyGrad.addColorStop(0, '#fff59d');
-    bodyGrad.addColorStop(1, '#ffb300');
-    ctx.fillStyle = bodyGrad;
+    // feet, tucked under the belly
+    ctx.strokeStyle = '#e65100';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-2, BIRD_RADIUS - 4);
+    ctx.lineTo(-4, BIRD_RADIUS + 3);
+    ctx.moveTo(-4, BIRD_RADIUS + 3);
+    ctx.lineTo(-7, BIRD_RADIUS + 4);
+    ctx.moveTo(-4, BIRD_RADIUS + 3);
+    ctx.lineTo(-2, BIRD_RADIUS + 5);
+    ctx.moveTo(4, BIRD_RADIUS - 4);
+    ctx.lineTo(5, BIRD_RADIUS + 3);
+    ctx.moveTo(5, BIRD_RADIUS + 3);
+    ctx.lineTo(2, BIRD_RADIUS + 4);
+    ctx.moveTo(5, BIRD_RADIUS + 3);
+    ctx.lineTo(7, BIRD_RADIUS + 5);
+    ctx.stroke();
+
+    // body - back shading over a lighter belly for a rounder, less flat look
+    ctx.fillStyle = '#ffca28';
     ctx.strokeStyle = '#e65100';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -266,52 +301,100 @@
     ctx.fill();
     ctx.stroke();
 
-    // wing (flaps continuously)
+    const backGrad = ctx.createLinearGradient(0, -BIRD_RADIUS, 0, 2);
+    backGrad.addColorStop(0, '#f57f17');
+    backGrad.addColorStop(1, 'rgba(245, 127, 23, 0)');
+    ctx.fillStyle = backGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, BIRD_RADIUS - 1, BIRD_RADIUS - 3, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 249, 196, 0.85)';
+    ctx.beginPath();
+    ctx.ellipse(1, 5, BIRD_RADIUS - 6, BIRD_RADIUS - 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // wing (flaps continuously) with feather texture
     ctx.save();
     ctx.translate(-3, 2);
     ctx.rotate(wingAngle);
-    ctx.fillStyle = '#ef6c00';
+    const wingGrad = ctx.createLinearGradient(-9, 0, 9, 0);
+    wingGrad.addColorStop(0, '#e65100');
+    wingGrad.addColorStop(1, '#ff9800');
+    ctx.fillStyle = wingGrad;
     ctx.strokeStyle = '#bf360c';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.ellipse(0, 3, 9, 5, 0.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.strokeStyle = 'rgba(191, 54, 12, 0.6)';
+    ctx.lineWidth = 1;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-2, 0 + i * 2.5);
+      ctx.lineTo(7, 2 + i * 2.5);
+      ctx.stroke();
+    }
     ctx.restore();
 
     // head crest
-    ctx.fillStyle = '#e65100';
+    ctx.fillStyle = '#d84315';
     ctx.beginPath();
-    ctx.moveTo(-3, -BIRD_RADIUS + 2);
-    ctx.lineTo(1, -BIRD_RADIUS - 7);
-    ctx.lineTo(5, -BIRD_RADIUS + 3);
+    ctx.moveTo(-4, -BIRD_RADIUS + 2);
+    ctx.lineTo(0, -BIRD_RADIUS - 8);
+    ctx.lineTo(2, -BIRD_RADIUS + 1);
+    ctx.moveTo(0, -BIRD_RADIUS + 1);
+    ctx.lineTo(4, -BIRD_RADIUS - 7);
+    ctx.lineTo(6, -BIRD_RADIUS + 3);
     ctx.closePath();
     ctx.fill();
 
-    // eye
+    // cheek blush
+    ctx.fillStyle = 'rgba(255, 138, 101, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(-2, 1, 4.5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // eye with brow and highlight
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(5, -5, 5, 0, Math.PI * 2);
+    ctx.arc(5, -5, 4.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3e2723';
+    ctx.beginPath();
+    ctx.arc(6.3, -4.7, 2.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.arc(6.5, -5, 2.3, 0, Math.PI * 2);
+    ctx.arc(6.6, -4.7, 1.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(7.3, -6.3, 0.9, 0, Math.PI * 2);
+    ctx.arc(7.4, -5.8, 0.8, 0, Math.PI * 2);
     ctx.fill();
-
-    // beak
-    ctx.fillStyle = '#ff8f00';
     ctx.strokeStyle = '#e65100';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(5, -6.5, 5, -2.5, -0.5);
+    ctx.stroke();
+
+    // beak, curved and slightly hooked like a real bird's
+    ctx.fillStyle = '#ff8f00';
+    ctx.strokeStyle = '#c25e00';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(BIRD_RADIUS - 3, -2);
-    ctx.lineTo(BIRD_RADIUS + 11, 1);
-    ctx.lineTo(BIRD_RADIUS - 3, 7);
+    ctx.moveTo(BIRD_RADIUS - 3, -3);
+    ctx.quadraticCurveTo(BIRD_RADIUS + 14, -2, BIRD_RADIUS + 12, 1);
+    ctx.quadraticCurveTo(BIRD_RADIUS + 6, 3, BIRD_RADIUS - 3, 6);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(194, 94, 0, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(BIRD_RADIUS - 1, 1);
+    ctx.lineTo(BIRD_RADIUS + 10, 0.5);
     ctx.stroke();
 
     ctx.restore();
@@ -327,26 +410,6 @@
     ctx.fillText(score, WIDTH / 2, 60);
   }
 
-  function drawCenteredPanel(lines) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, HEIGHT / 2 - 90, WIDTH, 180);
-
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    lines.forEach((line, i) => {
-      ctx.font = line.font || '20px Segoe UI, sans-serif';
-      ctx.fillText(line.text, WIDTH / 2, HEIGHT / 2 - 40 + i * 36);
-    });
-  }
-
-  function drawStartOverlay() {
-    drawCenteredPanel([
-      { text: 'Claude Flappy', font: 'bold 32px Segoe UI, sans-serif' },
-      { text: 'Click, tap, or press Space to flap', font: '18px Segoe UI, sans-serif' },
-      { text: `Best: ${best}`, font: '18px Segoe UI, sans-serif' },
-    ]);
-  }
-
   function drawRoundedRect(x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -355,6 +418,94 @@
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
+  }
+
+  function drawStar(cx, cy, size, alpha) {
+    ctx.fillStyle = `rgba(255, 235, 59, ${alpha})`;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const angle = (Math.PI / 5) * i - Math.PI / 2;
+      const rad = i % 2 === 0 ? size : size * 0.42;
+      const px = cx + Math.cos(angle) * rad;
+      const py = cy + Math.sin(angle) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawStartOverlay() {
+    const panelW = 300;
+    const panelH = 220;
+    const panelX = WIDTH / 2 - panelW / 2;
+    const panelY = HEIGHT / 2 - panelH / 2;
+    const pulse = (Math.sin(wingPhase * 0.8) + 1) / 2; // 0..1
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // twinkling stars around the card
+    const starSpots = [
+      [panelX - 6, panelY + 4],
+      [panelX + panelW + 6, panelY + 18],
+      [panelX + panelW - 2, panelY + panelH - 2],
+      [panelX + 10, panelY + panelH + 10],
+    ];
+    starSpots.forEach(([sx, sy], i) => {
+      const twinkle = (Math.sin(wingPhase * 0.9 + i * 1.7) + 1) / 2;
+      drawStar(sx, sy, 5 + twinkle * 3, 0.4 + twinkle * 0.6);
+    });
+
+    // card with soft drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 10;
+    const cardGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
+    cardGrad.addColorStop(0, '#e1f5fe');
+    cardGrad.addColorStop(1, '#b3e5fc');
+    drawRoundedRect(panelX, panelY, panelW, panelH, 22);
+    ctx.fillStyle = cardGrad;
+    ctx.fill();
+    ctx.restore();
+
+    drawRoundedRect(panelX, panelY, panelW, panelH, 22);
+    ctx.strokeStyle = '#0277bd';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+
+    // title with a playful drop-shadow pop
+    ctx.font = 'bold 30px Segoe UI, sans-serif';
+    ctx.fillStyle = '#01579b';
+    ctx.fillText('Claude Flappy', WIDTH / 2 + 2, panelY + 52);
+    ctx.fillStyle = '#ffb300';
+    ctx.fillText('Claude Flappy', WIDTH / 2, panelY + 50);
+
+    ctx.fillStyle = '#01579b';
+    ctx.font = '15px Segoe UI, sans-serif';
+    ctx.fillText('Click, tap, or press Space to flap', WIDTH / 2, panelY + 86);
+
+    ctx.fillStyle = '#0277bd';
+    ctx.font = 'bold 15px Segoe UI, sans-serif';
+    ctx.fillText(`\u{1F3C6} Best: ${best}`, WIDTH / 2, panelY + 116);
+
+    // pulsing call-to-action pill
+    const pillY = panelY + panelH - 42;
+    const scale = 1 + pulse * 0.07;
+    ctx.save();
+    ctx.translate(WIDTH / 2, pillY);
+    ctx.scale(scale, scale);
+    drawRoundedRect(-95, -18, 190, 36, 18);
+    ctx.fillStyle = `rgba(255, 179, 0, ${0.85 + pulse * 0.15})`;
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tap to Start', 0, 5);
+    ctx.restore();
   }
 
   function drawGameOverOverlay() {
