@@ -23,7 +23,7 @@
   const BEST_SCORE_KEY = 'claudeflappy_best_score';
 
   let state = STATE.START;
-  let bird, pipes, score, best, timeSincePipe, lastTime, groundOffset, bgOffset, wingPhase, trees;
+  let bird, pipes, score, best, timeSincePipe, lastTime, groundOffset, bgOffset, wingPhase, trees, isNewBest;
 
   function initTrees() {
     trees = [];
@@ -33,7 +33,7 @@
       trees.push({
         x,
         width,
-        height: 55 + Math.random() * 65,
+        height: 60 + Math.random() * 65,
         shade: Math.random() > 0.5,
       });
       x += width + 20 + Math.random() * 45;
@@ -150,7 +150,8 @@
 
     if (checkCollisions()) {
       state = STATE.GAME_OVER;
-      if (score > best) {
+      isNewBest = score > best;
+      if (isNewBest) {
         best = score;
         saveBest(best);
       }
@@ -168,24 +169,32 @@
   function drawTree(x, tree) {
     const baseY = HEIGHT - GROUND_HEIGHT;
     const trunkWidth = 8;
-    const trunkHeight = 20;
+    const trunkHeight = 40;
 
     ctx.fillStyle = '#5d3a1a';
     ctx.fillRect(x + tree.width / 2 - trunkWidth / 2, baseY - trunkHeight, trunkWidth, trunkHeight);
 
     const cx = x + tree.width / 2;
     const bottomY = baseY - trunkHeight;
-    const topY = bottomY - tree.height;
-    const midY = (bottomY + topY) / 2;
     const r = tree.width / 2;
 
+    // Stack overlapping circles from bottom to top. The vertical step is
+    // kept smaller than the combined radius of neighboring lobes so they
+    // always overlap, however tall the tree is - otherwise tall/narrow
+    // trees end up with lobes spaced too far apart to touch.
+    const step = r * 0.8;
+    const layers = Math.max(3, Math.round(tree.height / step) + 1);
+
     ctx.fillStyle = tree.shade ? '#3f6b47' : '#4f7d54';
-    ctx.beginPath();
-    ctx.arc(cx, bottomY - r * 0.5, r, 0, Math.PI * 2);
-    ctx.arc(cx - r * 0.55, midY, r * 0.8, 0, Math.PI * 2);
-    ctx.arc(cx + r * 0.55, midY, r * 0.8, 0, Math.PI * 2);
-    ctx.arc(cx, topY + r * 0.5, r * 0.75, 0, Math.PI * 2);
-    ctx.fill();
+    for (let i = 0; i < layers; i++) {
+      const t = layers === 1 ? 0 : i / (layers - 1); // 0 at bottom, 1 at top
+      const ly = bottomY - r * 0.5 - i * step;
+      const jitter = Math.sin(i * 2.4 + tree.width) * r * 0.3;
+      const lr = r * (1 - t * 0.3); // taper slightly toward the top
+      ctx.beginPath();
+      ctx.arc(cx + jitter, ly, lr, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function drawTrees() {
@@ -338,12 +347,83 @@
     ]);
   }
 
+  function drawRoundedRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
   function drawGameOverOverlay() {
-    drawCenteredPanel([
-      { text: 'Game Over', font: 'bold 32px Segoe UI, sans-serif' },
-      { text: `Score: ${score}   Best: ${best}`, font: '20px Segoe UI, sans-serif' },
-      { text: 'Click, tap, or press Space to restart', font: '16px Segoe UI, sans-serif' },
-    ]);
+    const panelW = 280;
+    const panelH = isNewBest ? 230 : 200;
+    const panelX = WIDTH / 2 - panelW / 2;
+    const panelY = HEIGHT / 2 - panelH / 2;
+
+    // dim the scene behind the card
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // card with soft drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 10;
+    const cardGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
+    cardGrad.addColorStop(0, '#fff8e1');
+    cardGrad.addColorStop(1, '#ffe0b2');
+    drawRoundedRect(panelX, panelY, panelW, panelH, 20);
+    ctx.fillStyle = cardGrad;
+    ctx.fill();
+    ctx.restore();
+
+    drawRoundedRect(panelX, panelY, panelW, panelH, 20);
+    ctx.strokeStyle = '#e65100';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#d84315';
+    ctx.font = 'bold 32px Segoe UI, sans-serif';
+    ctx.fillText('Game Over', WIDTH / 2, panelY + 46);
+
+    ctx.strokeStyle = 'rgba(230, 81, 0, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(panelX + 28, panelY + 60);
+    ctx.lineTo(panelX + panelW - 28, panelY + 60);
+    ctx.stroke();
+
+    ctx.fillStyle = '#6d4c25';
+    ctx.font = '15px Segoe UI, sans-serif';
+    ctx.fillText('SCORE', WIDTH / 2 - 58, panelY + 88);
+    ctx.fillText('BEST', WIDTH / 2 + 58, panelY + 88);
+
+    ctx.fillStyle = '#4e342e';
+    ctx.font = 'bold 30px Segoe UI, sans-serif';
+    ctx.fillText(score, WIDTH / 2 - 58, panelY + 120);
+
+    ctx.fillStyle = isNewBest ? '#f9a825' : '#4e342e';
+    ctx.fillText(best, WIDTH / 2 + 58, panelY + 120);
+
+    let hintY = panelY + 152;
+    if (isNewBest) {
+      ctx.fillStyle = '#f9a825';
+      ctx.font = 'bold 15px Segoe UI, sans-serif';
+      ctx.fillText('★ New Best! ★', WIDTH / 2, panelY + 148);
+      hintY = panelY + 182;
+    }
+
+    drawRoundedRect(WIDTH / 2 - 118, hintY - 15, 236, 30, 15);
+    ctx.fillStyle = '#ff8f00';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px Segoe UI, sans-serif';
+    ctx.fillText('Click, tap, or Space to retry', WIDTH / 2, hintY + 5);
   }
 
   function render() {
