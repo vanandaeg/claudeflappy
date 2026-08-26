@@ -121,9 +121,11 @@
   }
 
   function update(dt) {
-    groundOffset = (groundOffset + PIPE_SPEED * dt) % 24;
-    bgOffset = (bgOffset + TREE_SPEED * dt) % TREE_LAYER_WIDTH;
-    wingPhase += dt * 10;
+    if (state !== STATE.GAME_OVER) {
+      groundOffset = (groundOffset + PIPE_SPEED * dt) % 24;
+      bgOffset = (bgOffset + TREE_SPEED * dt) % TREE_LAYER_WIDTH;
+      wingPhase += dt * 10;
+    }
 
     if (state !== STATE.PLAYING) return;
 
@@ -171,12 +173,18 @@
     ctx.fillStyle = '#5d3a1a';
     ctx.fillRect(x + tree.width / 2 - trunkWidth / 2, baseY - trunkHeight, trunkWidth, trunkHeight);
 
+    const cx = x + tree.width / 2;
+    const bottomY = baseY - trunkHeight;
+    const topY = bottomY - tree.height;
+    const midY = (bottomY + topY) / 2;
+    const r = tree.width / 2;
+
     ctx.fillStyle = tree.shade ? '#3f6b47' : '#4f7d54';
     ctx.beginPath();
-    ctx.moveTo(x, baseY - trunkHeight + 2);
-    ctx.lineTo(x + tree.width / 2, baseY - trunkHeight - tree.height);
-    ctx.lineTo(x + tree.width, baseY - trunkHeight + 2);
-    ctx.closePath();
+    ctx.arc(cx, bottomY - r * 0.5, r, 0, Math.PI * 2);
+    ctx.arc(cx - r * 0.55, midY, r * 0.8, 0, Math.PI * 2);
+    ctx.arc(cx + r * 0.55, midY, r * 0.8, 0, Math.PI * 2);
+    ctx.arc(cx, topY + r * 0.5, r * 0.75, 0, Math.PI * 2);
     ctx.fill();
   }
 
