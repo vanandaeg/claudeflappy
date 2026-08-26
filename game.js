@@ -15,13 +15,30 @@
   const PIPE_SPAWN_INTERVAL = 1.5; // seconds
   const BIRD_RADIUS = 14;
   const BIRD_X = 90;
+  const TREE_LAYER_WIDTH = WIDTH * 2;
+  const TREE_SPEED = PIPE_SPEED * 0.35;
 
   const STATE = { START: 'start', PLAYING: 'playing', GAME_OVER: 'gameover' };
 
   const BEST_SCORE_KEY = 'claudeflappy_best_score';
 
   let state = STATE.START;
-  let bird, pipes, score, best, timeSincePipe, lastTime, groundOffset;
+  let bird, pipes, score, best, timeSincePipe, lastTime, groundOffset, bgOffset, wingPhase, trees;
+
+  function initTrees() {
+    trees = [];
+    let x = 0;
+    while (x < TREE_LAYER_WIDTH) {
+      const width = 40 + Math.random() * 35;
+      trees.push({
+        x,
+        width,
+        height: 55 + Math.random() * 65,
+        shade: Math.random() > 0.5,
+      });
+      x += width + 20 + Math.random() * 45;
+    }
+  }
 
   function loadBest() {
     const stored = localStorage.getItem(BEST_SCORE_KEY);
@@ -105,6 +122,8 @@
 
   function update(dt) {
     groundOffset = (groundOffset + PIPE_SPEED * dt) % 24;
+    bgOffset = (bgOffset + TREE_SPEED * dt) % TREE_LAYER_WIDTH;
+    wingPhase += dt * 10;
 
     if (state !== STATE.PLAYING) return;
 
@@ -144,6 +163,33 @@
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
   }
 
+  function drawTree(x, tree) {
+    const baseY = HEIGHT - GROUND_HEIGHT;
+    const trunkWidth = 8;
+    const trunkHeight = 20;
+
+    ctx.fillStyle = '#5d3a1a';
+    ctx.fillRect(x + tree.width / 2 - trunkWidth / 2, baseY - trunkHeight, trunkWidth, trunkHeight);
+
+    ctx.fillStyle = tree.shade ? '#3f6b47' : '#4f7d54';
+    ctx.beginPath();
+    ctx.moveTo(x, baseY - trunkHeight + 2);
+    ctx.lineTo(x + tree.width / 2, baseY - trunkHeight - tree.height);
+    ctx.lineTo(x + tree.width, baseY - trunkHeight + 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawTrees() {
+    for (const tree of trees) {
+      for (const dup of [0, -TREE_LAYER_WIDTH, TREE_LAYER_WIDTH]) {
+        const sx = tree.x - bgOffset + dup;
+        if (sx < -100 || sx > WIDTH + 100) continue;
+        drawTree(sx, tree);
+      }
+    }
+  }
+
   function drawPipes() {
     ctx.fillStyle = '#4caf50';
     ctx.strokeStyle = '#2e7d32';
@@ -167,9 +213,9 @@
   }
 
   function drawGround() {
-    ctx.fillStyle = '#ded895';
+    ctx.fillStyle = '#6b4423';
     ctx.fillRect(0, HEIGHT - GROUND_HEIGHT, WIDTH, GROUND_HEIGHT);
-    ctx.fillStyle = '#c2b774';
+    ctx.fillStyle = '#4a2c15';
     for (let x = -groundOffset; x < WIDTH; x += 24) {
       ctx.fillRect(x, HEIGHT - GROUND_HEIGHT, 12, 10);
     }
@@ -180,30 +226,76 @@
     ctx.translate(bird.x, bird.y);
     ctx.rotate(bird.rotation);
 
-    ctx.fillStyle = '#ffd54f';
-    ctx.strokeStyle = '#f57f17';
+    const wingAngle = Math.sin(wingPhase) * 0.5;
+
+    // tail
+    ctx.fillStyle = '#f9a825';
+    ctx.beginPath();
+    ctx.moveTo(-BIRD_RADIUS + 3, 0);
+    ctx.lineTo(-BIRD_RADIUS - 8, -6);
+    ctx.lineTo(-BIRD_RADIUS - 8, 6);
+    ctx.closePath();
+    ctx.fill();
+
+    // body
+    const bodyGrad = ctx.createRadialGradient(-4, -5, 2, 0, 0, BIRD_RADIUS + 2);
+    bodyGrad.addColorStop(0, '#fff59d');
+    bodyGrad.addColorStop(1, '#ffb300');
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = '#e65100';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, 0, BIRD_RADIUS, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, BIRD_RADIUS, BIRD_RADIUS - 2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
+    // wing (flaps continuously)
+    ctx.save();
+    ctx.translate(-3, 2);
+    ctx.rotate(wingAngle);
+    ctx.fillStyle = '#ef6c00';
+    ctx.strokeStyle = '#bf360c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 3, 9, 5, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // head crest
+    ctx.fillStyle = '#e65100';
+    ctx.beginPath();
+    ctx.moveTo(-3, -BIRD_RADIUS + 2);
+    ctx.lineTo(1, -BIRD_RADIUS - 7);
+    ctx.lineTo(5, -BIRD_RADIUS + 3);
+    ctx.closePath();
+    ctx.fill();
+
+    // eye
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(4, -4, 4, 0, Math.PI * 2);
+    ctx.arc(5, -5, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.arc(5, -4, 2, 0, Math.PI * 2);
+    ctx.arc(6.5, -5, 2.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(7.3, -6.3, 0.9, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#f57f17';
+    // beak
+    ctx.fillStyle = '#ff8f00';
+    ctx.strokeStyle = '#e65100';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(BIRD_RADIUS - 2, 0);
-    ctx.lineTo(BIRD_RADIUS + 10, -3);
-    ctx.lineTo(BIRD_RADIUS - 2, 6);
+    ctx.moveTo(BIRD_RADIUS - 3, -2);
+    ctx.lineTo(BIRD_RADIUS + 11, 1);
+    ctx.lineTo(BIRD_RADIUS - 3, 7);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
 
     ctx.restore();
   }
@@ -248,6 +340,7 @@
 
   function render() {
     drawBackground();
+    drawTrees();
     drawPipes();
     drawGround();
     drawBird();
@@ -285,6 +378,9 @@
   });
 
   best = loadBest();
+  bgOffset = 0;
+  wingPhase = 0;
+  initTrees();
   resetGame();
   requestAnimationFrame(loop);
 })();
